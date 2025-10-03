@@ -15,8 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código
 COPY . .
 
-# Exponer el puerto 8002
+# Recolectar archivos estáticos
+RUN python manage.py collectstatic --noinput || true
+
+# Exponer el puerto (Render usa PORT dinámicamente)
 EXPOSE 8002
 
-# Comando para ejecutar la aplicación
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8002"]
+# Usar gunicorn en producción
+CMD gunicorn ReportesConsulta.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
