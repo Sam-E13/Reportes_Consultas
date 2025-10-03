@@ -41,7 +41,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'reportes_project.urls'
+ROOT_URLCONF = 'ReportesConsulta.urls'
 
 TEMPLATES = [
     {
@@ -58,7 +58,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'reportes_project.wsgi.application'
+WSGI_APPLICATION = 'ReportesConsulta.wsgi.application'
 
 # Database - Conecta a la misma BD que tu backend principal
 DATABASE_URL = os.environ.get('DATABASE_URL')
