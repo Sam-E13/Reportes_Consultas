@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'reportes_app',  # Ajusta al nombre de tu app
+    'reportes',  # Tu app correcta
     'corsheaders',
 ]
 
