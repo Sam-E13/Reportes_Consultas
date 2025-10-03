@@ -7,3 +7,4 @@ pytz==2025.1
 gunicorn
 reportlab
 dj-database-url
+whitenoise
