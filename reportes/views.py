@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 class EstadisticasConsultasView(APIView):
     def get(self, request):
         try:
-            # URLs de los servicios
-            API_CONSULTAS = 'http://backend:8000/Modulos/Consultas/'
-            API_PROFESIONALES = 'http://backend:8000/Catalogos/Profesionales-Salud/'
-            API_ATLETAS = 'http://backend:8000/Catalogos/Atletas/'
+            # URLs de los servicios - USANDO CONFIGURACIÓN DE SETTINGS
+            API_CONSULTAS = settings.API_CONSULTAS
+            API_PROFESIONALES = settings.API_PROFESIONALES
+            API_ATLETAS = settings.API_ATLETAS
             
             # 1. Obtener todas las consultas
             logger.info(f"Consultando consultas en: {API_CONSULTAS}")
@@ -57,32 +57,27 @@ class EstadisticasConsultasView(APIView):
             atletas_response.raise_for_status()
             todos_atletas = atletas_response.json()
             
-            # 6. Datos mensuales por profesional (últimos 12 meses) - CORREGIDO
+            # 6. Datos mensuales por profesional (últimos 12 meses)
             monthly_data_by_profesional = []
-            meses_mostrar = 12  # Mostrar datos de los últimos 12 meses
+            meses_mostrar = 12
             
             for i in range(meses_mostrar):
-                # Calcular mes y año para el período actual (manteniendo lógica original)
                 mes_offset = meses_mostrar - i - 1
                 month = (mes_actual - mes_offset - 1) % 12 + 1
                 year = año_actual - (1 if mes_actual - mes_offset - 1 < 0 else 0)
                 
-                # Filtrar consultas para este mes
                 consultas_mes = [
                     c for c in todas_consultas 
                     if datetime.strptime(c['fecha'], '%Y-%m-%d').month == month
                     and datetime.strptime(c['fecha'], '%Y-%m-%d').year == year
                 ]
                 
-                # Contar consultas por profesional para este mes
                 profesionales_data_mes = []
                 for profesional in todos_profesionales:
                     profesional_id = str(profesional['id'])
-                    # CORREGIDO: usar 'profesional_salud' en lugar de 'profesional_salud_id'
                     count = sum(1 for c in consultas_mes 
                               if str(c.get('profesional_salud', c.get('profesional_salud_id', ''))) == profesional_id)
                     
-                    # Crear nombre completo del profesional
                     nombre_completo = f"{profesional.get('nombre', '')} {profesional.get('apPaterno', '')}".strip()
                     
                     profesionales_data_mes.append({
@@ -99,14 +94,10 @@ class EstadisticasConsultasView(APIView):
                     'total': len(consultas_mes)
                 })
             
-            # Ordenar por fecha (más antigua primero) - MANTENER ORDEN ORIGINAL
-            # monthly_data_by_profesional.reverse()  # Comentado para mantener orden original
-            
-            # 7. Datos totales por profesional (para el gráfico simple) - CORREGIDO
+            # 7. Datos totales por profesional
             profesionales_data = []
             for profesional in todos_profesionales:
                 profesional_id = str(profesional['id'])
-                # CORREGIDO: usar 'profesional_salud' en lugar de 'profesional_salud_id'
                 total_consultas_prof = sum(
                     1 for c in consultas_mes_actual 
                     if str(c.get('profesional_salud', c.get('profesional_salud_id', ''))) == profesional_id
@@ -121,11 +112,10 @@ class EstadisticasConsultasView(APIView):
                     'especialidad': profesional.get('especialidad', 'Sin especialidad')
                 })
             
-            # 8. Datos por atleta (top 10 con más consultas) - CORREGIDO
+            # 8. Datos por atleta (top 10 con más consultas)
             atletas_data = []
             for atleta in todos_atletas:
                 atleta_id = str(atleta['id'])
-                # CORREGIDO: usar 'atleta' en lugar de 'atleta_id'
                 total_consultas_atleta = sum(
                     1 for c in todas_consultas 
                     if str(c.get('atleta', c.get('atleta_id', ''))) == atleta_id
@@ -133,7 +123,6 @@ class EstadisticasConsultasView(APIView):
                 
                 nombre_completo = f"{atleta.get('nombre', '')} {atleta.get('apPaterno', '')}".strip()
                 
-                # Solo agregar atletas que tienen consultas
                 if total_consultas_atleta > 0:
                     atletas_data.append({
                         'nombre': nombre_completo,
@@ -141,10 +130,9 @@ class EstadisticasConsultasView(APIView):
                         'total': total_consultas_atleta
                     })
             
-            # Ordenar y tomar top 10
             top_atletas = sorted(atletas_data, key=lambda x: x['total'], reverse=True)[:10]
             
-            # 9. Distribución por diagnóstico común (simplificado)
+            # 9. Distribución por diagnóstico común
             diagnosticos = {}
             for consulta in todas_consultas:
                 diagnostico = consulta.get('diagnostico', 'Sin diagnóstico').strip()
@@ -155,31 +143,14 @@ class EstadisticasConsultasView(APIView):
                 [{'nombre': k, 'total': v} for k, v in diagnosticos.items()], 
                 key=lambda x: x['total'], 
                 reverse=True
-            )[:5]  # Top 5 diagnósticos
+            )[:5]
             
-            # Log para debugging - AGREGADO PARA VERIFICAR DATOS
             logger.info(f"Total consultas procesadas: {len(todas_consultas)}")
             logger.info(f"Profesionales encontrados: {len(todos_profesionales)}")
             logger.info(f"Atletas encontrados: {len(todos_atletas)}")
             
-            # Log de ejemplo de datos para verificar estructura
-            if todas_consultas:
-                logger.info(f"Ejemplo de consulta: {todas_consultas[0]}")
-            if todos_profesionales:
-                logger.info(f"Ejemplo de profesional: {todos_profesionales[0]}")
-            if todos_atletas:
-                logger.info(f"Ejemplo de atleta: {todos_atletas[0]}")
-                
-            logger.info(f"Atletas con consultas: {len(top_atletas)}")
-            logger.info(f"Meses de datos: {len(monthly_data_by_profesional)}")
-            
-            # Log de algunos top atletas
-            if top_atletas:
-                logger.info(f"Top 3 atletas: {top_atletas[:3]}")
-            
-            # Respuesta final
             return Response({
-                'total_consultas': len(todas_consultas),  # Total histórico
+                'total_consultas': len(todas_consultas),
                 'consultas_mes_actual': len(consultas_mes_actual),
                 'profesionales_data': profesionales_data,
                 'monthly_data_by_profesional': monthly_data_by_profesional,
@@ -201,28 +172,28 @@ class EstadisticasConsultasView(APIView):
                 'error': 'Error interno del servidor',
                 'detalles': str(e)
             }, status=500)
-            
-logger = logging.getLogger(__name__)
+
 
 class GenerarReporteConsultasPDFView(APIView):
     """
     Vista que genera reportes PDF de consultas médicas con filtros aplicables.
     """
 
-    # Configuración de endpoints
-    CONSULTAS_API_URL = 'http://backend:8000/Modulos/Consultas/'
-    CATALOGOS_API_URL = 'http://backend:8000/Catalogos/'
+    # Configuración de endpoints - USANDO SETTINGS
+    @property
+    def CONSULTAS_API_URL(self):
+        return settings.API_CONSULTAS
+    
+    @property
+    def CATALOGOS_API_BASE_URL(self):
+        # Extraer la base de la URL de API_ATLETAS
+        return settings.API_BASE_URL + '/Catalogos/'
+    
     TIMEOUT = 10  # segundos
 
     def post(self, request):
         """
         Genera un reporte PDF de consultas médicas con filtros aplicables.
-        
-        Parámetros esperados en request.data:
-        - fecha_inicio (requerido): Fecha de inicio (YYYY-MM-DD)
-        - fecha_fin (requerido): Fecha de fin (YYYY-MM-DD)
-        - atleta_id (opcional): ID del atleta para filtrar
-        - profesional_id (opcional): ID del profesional para filtrar
         """
         try:
             logger.info("Iniciando generación de reporte PDF con filtros: %s", request.data)
@@ -238,7 +209,6 @@ class GenerarReporteConsultasPDFView(APIView):
 
             # 2. Obtener todas las consultas del servicio externo
             try:
-                # Modificado: Añadir parámetros de filtro directamente a la solicitud
                 params = {
                     'fecha_inicio': request.data.get('fecha_inicio'),
                     'fecha_fin': request.data.get('fecha_fin')
@@ -269,10 +239,9 @@ class GenerarReporteConsultasPDFView(APIView):
             # 3. Obtener catálogos necesarios
             catalogos = self._obtener_catalogos()
             if isinstance(catalogos, Response):
-                return catalogos  # Retorna el error si hubo problema
+                return catalogos
 
             # 4. Filtrar consultas según parámetros
-            # Modificado: Mejorar el filtrado para ser más flexible con los formatos
             consultas_filtradas = self._filtrar_consultas(
                 todas_consultas, 
                 request.data,
@@ -301,8 +270,6 @@ class GenerarReporteConsultasPDFView(APIView):
             )
             filename = f"reporte_consultas_{fecha_inicio}_{fecha_fin}.pdf"
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            
-            # Añadir encabezados CORS
             response['Access-Control-Allow-Origin'] = '*'
             response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
             response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
@@ -333,9 +300,6 @@ class GenerarReporteConsultasPDFView(APIView):
     def _obtener_catalogos(self):
         """
         Obtiene todos los catálogos necesarios desde los servicios externos.
-        
-        Returns:
-            dict: Diccionario con los catálogos o Response con error
         """
         catalogos = {
             'atletas': {},
@@ -343,18 +307,18 @@ class GenerarReporteConsultasPDFView(APIView):
         }
         
         try:
-            # Obtener atletas
+            # Obtener atletas - USANDO SETTINGS
             response = requests.get(
-                f"{self.CATALOGOS_API_URL}Atletas/",
+                settings.API_ATLETAS,
                 timeout=self.TIMEOUT
             )
             response.raise_for_status()
             for atleta in response.json():
                 catalogos['atletas'][str(atleta['id'])] = atleta
             
-            # Obtener profesionales
+            # Obtener profesionales - USANDO SETTINGS
             response = requests.get(
-                f"{self.CATALOGOS_API_URL}Profesionales-Salud/",
+                settings.API_PROFESIONALES,
                 timeout=self.TIMEOUT
             )
             response.raise_for_status()
@@ -376,16 +340,7 @@ class GenerarReporteConsultasPDFView(APIView):
     def _filtrar_consultas(self, consultas, filtros, catalogos):
         """
         Filtra las consultas según los parámetros recibidos.
-        
-        Args:
-            consultas (list): Lista de consultas a filtrar
-            filtros (dict): Parámetros de filtrado
-            catalogos (dict): Catálogos para validar IDs
-            
-        Returns:
-            list: Lista de consultas filtradas
         """
-        # Modificado: Mejorar el manejo de fechas para ser más flexible
         try:
             fecha_inicio = datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d')
             fecha_fin = datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').replace(
@@ -393,21 +348,19 @@ class GenerarReporteConsultasPDFView(APIView):
             )
         except ValueError as e:
             logger.error("Error al parsear fechas: %s", str(e))
-            # Si hay error en el formato de fecha, devolver todas las consultas
             return consultas
         
         consultas_filtradas = []
         
         for consulta in consultas:
             try:
-                # 1. Filtrar por fecha - Manejar múltiples formatos posibles
+                # 1. Filtrar por fecha
                 fecha_consulta = None
                 fecha_campos = ['fecha', 'creado_el', 'fecha_consulta', 'created_at']
                 
                 for campo in fecha_campos:
                     if campo in consulta and consulta[campo]:
                         try:
-                            # Intentar varios formatos de fecha
                             for formato in ['%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d']:
                                 try:
                                     fecha_consulta = datetime.strptime(consulta[campo], formato)
@@ -419,7 +372,6 @@ class GenerarReporteConsultasPDFView(APIView):
                         except Exception:
                             continue
                 
-                # Si no se pudo determinar la fecha, incluir la consulta
                 if not fecha_consulta:
                     logger.warning("No se pudo determinar la fecha para consulta %s", consulta.get('id', 'desconocido'))
                     consultas_filtradas.append(consulta)
@@ -428,28 +380,24 @@ class GenerarReporteConsultasPDFView(APIView):
                 if not (fecha_inicio <= fecha_consulta <= fecha_fin):
                     continue
                 
-                # 2. Filtrar por atleta si se especificó
+                # 2. Filtrar por atleta
                 if 'atleta_id' in filtros and filtros['atleta_id'] not in [None, "todos", ""]:
-                    # Obtener el ID del atleta de la consulta - más flexible
                     atleta_id_consulta = self._obtener_id_de_campo(consulta, ['atleta_id', 'atleta', 'id_atleta', 'paciente_id', 'paciente'])
                     
                     if not atleta_id_consulta or str(atleta_id_consulta) != str(filtros['atleta_id']):
                         continue
                 
-                # 3. Filtrar por profesional si se especificó
+                # 3. Filtrar por profesional
                 if 'profesional_id' in filtros and filtros['profesional_id'] not in [None, "todos", ""]:
-                    # Obtener el ID del profesional de la consulta - más flexible
                     profesional_id_consulta = self._obtener_id_de_campo(consulta, ['profesional_salud_id', 'profesional_salud', 'profesional_id', 'profesional', 'id_profesional', 'medico_id', 'medico'])
                     
                     if not profesional_id_consulta or str(profesional_id_consulta) != str(filtros['profesional_id']):
                         continue
                 
-                # Si pasó todos los filtros, agregar a la lista
                 consultas_filtradas.append(consulta)
                 
             except Exception as e:
                 logger.warning("Error al procesar consulta %s: %s", consulta.get('id', 'desconocido'), str(e))
-                # Incluir la consulta si hay error en el procesamiento
                 consultas_filtradas.append(consulta)
                 continue
                 
@@ -458,25 +406,16 @@ class GenerarReporteConsultasPDFView(APIView):
     def _enriquecer_consultas(self, consultas, catalogos):
         """
         Enriquece las consultas con información de catálogos.
-        
-        Args:
-            consultas (list): Lista de consultas a enriquecer
-            catalogos (dict): Catálogos con información adicional
-            
-        Returns:
-            list: Lista de consultas enriquecidas
         """
         consultas_enriquecidas = []
         
         for consulta in consultas:
-            # Modificado: Buscar el diagnóstico en diferentes campos posibles
             diagnostico = "No especificado"
             for campo in ['diagnostico', 'diagnóstico', 'diagnostic']:
                 if campo in consulta and consulta[campo]:
                     diagnostico = consulta[campo]
                     break
             
-            # Modificado: Buscar el tratamiento en diferentes campos posibles
             tratamiento = "No especificado"
             for campo in ['tratamiento', 'treatment']:
                 if campo in consulta and consulta[campo]:
@@ -517,12 +456,6 @@ class GenerarReporteConsultasPDFView(APIView):
     def _obtener_fecha_consulta(self, consulta):
         """
         Obtiene la fecha de consulta de diferentes campos posibles.
-        
-        Args:
-            consulta (dict): Objeto consulta
-            
-        Returns:
-            str: Fecha de consulta o cadena vacía
         """
         fecha_campos = ['fecha', 'creado_el', 'fecha_consulta', 'created_at']
         for campo in fecha_campos:
@@ -533,13 +466,6 @@ class GenerarReporteConsultasPDFView(APIView):
     def _obtener_id_de_campo(self, objeto, posibles_campos):
         """
         Obtiene el ID de un campo que puede estar en diferentes formatos.
-        
-        Args:
-            objeto (dict): Objeto que contiene el campo
-            posibles_campos (list): Lista de posibles nombres del campo
-            
-        Returns:
-            str: ID encontrado o None
         """
         for campo in posibles_campos:
             if campo in objeto:
@@ -553,18 +479,11 @@ class GenerarReporteConsultasPDFView(APIView):
     def _formatear_fecha(self, fecha_str):
         """
         Formatea una fecha ISO a un formato más legible.
-        
-        Args:
-            fecha_str (str): Fecha en formato ISO
-            
-        Returns:
-            str: Fecha formateada
         """
         if not fecha_str:
             return "Fecha no disponible"
             
         try:
-            # Intentar varios formatos de fecha
             for formato in ['%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d']:
                 try:
                     fecha = datetime.strptime(fecha_str, formato)
@@ -577,18 +496,10 @@ class GenerarReporteConsultasPDFView(APIView):
 
     def _generar_pdf(self, consultas, filtros):
         """
-        Genera un PDF con la información de las consultas con mejor presentación.
-        
-        Args:
-            consultas (list): Lista de consultas con datos enriquecidos
-            filtros (dict): Filtros aplicados
-                
-        Returns:
-            BytesIO: Buffer con el PDF generado
+        Genera un PDF con la información de las consultas.
         """
         buffer = io.BytesIO()
         
-        # Configuración del documento con márgenes adecuados
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
@@ -598,7 +509,6 @@ class GenerarReporteConsultasPDFView(APIView):
             bottomMargin=30
         )
         
-        # Estilos
         styles = getSampleStyleSheet()
         title_style = styles['Heading1']
         subtitle_style = styles['Heading2']
@@ -610,10 +520,9 @@ class GenerarReporteConsultasPDFView(APIView):
             textColor=colors.grey
         )
         
-        # Elementos del documento
         elements = []
         
-        # 1. Encabezado
+        # Encabezado
         elements.append(Paragraph("Reporte de Consultas Médicas", title_style))
         elements.append(Paragraph(
             f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 
@@ -621,16 +530,14 @@ class GenerarReporteConsultasPDFView(APIView):
         ))
         elements.append(Spacer(1, 0.25*inch))
         
-        # 2. Filtros aplicados
+        # Filtros aplicados
         elements.append(Paragraph("Filtros Aplicados:", subtitle_style))
         elements.append(Spacer(1, 0.1*inch))
         
-        # Fechas formateadas
         fecha_inicio = datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').strftime('%d/%m/%Y')
         fecha_fin = datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').strftime('%d/%m/%Y')
         elements.append(Paragraph(f"Período: {fecha_inicio} - {fecha_fin}", normal_style))
         
-        # Filtros específicos
         if 'atleta_id' in filtros and filtros['atleta_id'] not in [None, "todos", ""]:
             for consulta in consultas:
                 if str(consulta.get('atleta_id')) == str(filtros['atleta_id']):
@@ -651,14 +558,12 @@ class GenerarReporteConsultasPDFView(APIView):
         
         elements.append(Spacer(1, 0.25*inch))
         
-        # 3. Estadísticas resumidas
+        # Estadísticas
         elements.append(Paragraph("Resumen Estadístico:", subtitle_style))
         elements.append(Spacer(1, 0.1*inch))
         
-        # Calcular estadísticas
         total = len(consultas)
         
-        # Contar consultas por profesional
         profesionales = {}
         for consulta in consultas:
             profesional = consulta['profesional_nombre']
@@ -667,7 +572,6 @@ class GenerarReporteConsultasPDFView(APIView):
             else:
                 profesionales[profesional] = 1
         
-        # Tabla de estadísticas
         stats_data = [
             ["Total de Consultas", "Consultas por Profesional"],
             [
@@ -681,7 +585,7 @@ class GenerarReporteConsultasPDFView(APIView):
             colWidths=[2.5*inch, 4.5*inch]
         )
         stats_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3B82F6')),  # Azul moderno
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3B82F6')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('ALIGN', (0, 1), (-1, 1), 'LEFT'),
@@ -689,19 +593,18 @@ class GenerarReporteConsultasPDFView(APIView):
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#EFF6FF')),  # Azul claro
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#BFDBFE')),    # Borde azul claro
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#EFF6FF')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#BFDBFE')),
         ]))
         
         elements.append(stats_table)
         elements.append(Spacer(1, 0.25*inch))
         
-        # 4. Detalle de consultas
+        # Detalle de consultas
         if consultas:
             elements.append(Paragraph("Detalle de Consultas:", subtitle_style))
             elements.append(Spacer(1, 0.1*inch))
             
-            # Encabezados de tabla
             detail_headers = [
                 "Fecha", 
                 "Atleta", 
@@ -710,7 +613,6 @@ class GenerarReporteConsultasPDFView(APIView):
                 "Tratamiento"
             ]
             
-            # Datos de la tabla
             detail_data = [detail_headers]
             
             for consulta in consultas:
@@ -722,25 +624,23 @@ class GenerarReporteConsultasPDFView(APIView):
                     Paragraph(consulta.get('tratamiento', 'No especificado'), styles['Normal'])
                 ])
             
-            # Crear tabla con anchos de columna ajustados
             detail_table = Table(
                 detail_data, 
                 colWidths=[1.2*inch, 1.5*inch, 1.5*inch, 2.0*inch, 2.0*inch],
-                repeatRows=1  # Repetir encabezados en cada página
+                repeatRows=1
             )
             
-            # Estilo de la tabla
             detail_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3B82F6')),  # Azul moderno
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3B82F6')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, -1), 9),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#E5E7EB')),  # Gris claro
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#E5E7EB')),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('WORDWRAP', (0, 1), (-1, -1), True),  # Ajuste de texto
+                ('WORDWRAP', (0, 1), (-1, -1), True),
             ]))
             
             elements.append(detail_table)
@@ -751,17 +651,16 @@ class GenerarReporteConsultasPDFView(APIView):
             ))
             elements.append(Spacer(1, 0.5*inch))
         
-        # 5. Pie de página
         elements.append(Spacer(1, 0.25*inch))
         elements.append(Paragraph(
             "Este reporte fue generado automáticamente por el Sistema de Gestión Médica.",
             small_style
         ))
         
-        # Construir el documento
         doc.build(elements)
         buffer.seek(0)
         return buffer
+
 
 class FiltrosConsultaView(APIView):
     """
@@ -769,27 +668,25 @@ class FiltrosConsultaView(APIView):
     """
     
     def get(self, request):
-        # URL del endpoint para obtener datos de filtros
-        API_URL_BASE = 'http://backend:8000/Catalogos/'
-        
         try:
-            # Obtener datos de atletas
-            atletas_response = requests.get(f"{API_URL_BASE}Atletas/", timeout=5)
+            # Obtener datos de atletas - USANDO SETTINGS
+            atletas_response = requests.get(settings.API_ATLETAS, timeout=5)
             atletas_response.raise_for_status()
             
-            # Usar un diccionario para eliminar duplicados por ID
             atletas_dict = {}
             for a in atletas_response.json():
                 if a["id"] not in atletas_dict:
-                    atletas_dict[a["id"]] = {"id": a["id"], "nombre": f"{a.get('nombre', '')} {a.get('apPaterno', '')} {a.get('apMaterno', '')}"}
+                    atletas_dict[a["id"]] = {
+                        "id": a["id"], 
+                        "nombre": f"{a.get('nombre', '')} {a.get('apPaterno', '')} {a.get('apMaterno', '')}"
+                    }
             
             atletas = list(atletas_dict.values())
             
-            # Obtener datos de profesionales de salud
-            profesionales_response = requests.get(f"{API_URL_BASE}Profesionales-Salud/", timeout=5)
+            # Obtener datos de profesionales - USANDO SETTINGS
+            profesionales_response = requests.get(settings.API_PROFESIONALES, timeout=5)
             profesionales_response.raise_for_status()
             
-            # Usar un diccionario para eliminar duplicados por ID
             profesionales_dict = {}
             for p in profesionales_response.json():
                 if p["id"] not in profesionales_dict:
@@ -800,7 +697,6 @@ class FiltrosConsultaView(APIView):
             
             profesionales = list(profesionales_dict.values())
             
-            # Añadir encabezados CORS
             response = Response({
                 'atletas': atletas,
                 'profesionales': profesionales
