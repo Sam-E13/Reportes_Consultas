@@ -1,0 +1,30 @@
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Entornos virtuales
+env/
+venv/
+ENV/
+.venv/
+
+# Archivos de configuración locales
+*.log
+*.pot
+*.py[cod]
+*.mo
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de IDEs/editores
+.vscode/
+.idea/
+
+# Archivos de migraciones (opcionales si no quieres subirlos)
+*/migrations/*.py
+!*/migrations/__init__.py
